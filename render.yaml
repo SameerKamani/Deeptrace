@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: deeptrace-backend
+    env: python
+    plan: free
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
+    autoDeploy: true
+    envVars:
+      - key: SPECTRAL_MODEL_PATH
+        value: deeptrace_fuse_best
+      - key: SPECTRAL_AI_INDEX
+        value: "1"
+      - key: SPECTRAL_INPUT_SIZE
+        value: "224"
+      - key: SPECTRAL_NORMALIZE
+        value: "1"
+
+  - type: static
+    name: deeptrace-frontend
+    env: static
+    plan: free
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: frontend/dist
+    autoDeploy: true
