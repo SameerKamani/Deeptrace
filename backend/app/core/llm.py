@@ -6,9 +6,20 @@ from typing import Optional
 
 class LLMSettings:
     def __init__(self) -> None:
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+        keys = []
+        try:
+            with open(".env", "r") as f:
+                for line in f:
+                    if line.startswith("GEMINI_API_KEY="):
+                        keys.append(line.strip().split("=", 1)[1])
+        except Exception:
+            pass
+            
+        self.gemini_api_keys = keys if keys else [os.getenv("GEMINI_API_KEY")]
+        self.gemini_api_key = self.gemini_api_keys[0] if self.gemini_api_keys else None
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
         self.gemini_vision_model = os.getenv("GEMINI_VISION_MODEL", self.gemini_model)
+        
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         self.explanation_provider = os.getenv("LLM_EXPLANATION_PROVIDER", "groq")

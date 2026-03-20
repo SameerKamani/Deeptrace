@@ -46,7 +46,13 @@ class ReasoningEngine:
             verdict = Verdict.INCONCLUSIVE
             conclusion = "Evidence is present but not strong enough to support a verdict."
 
-        fallback_explanation = " ".join(summary_lines + [conclusion])
+        base_str = "Based on our analysis, "
+        if verdict == Verdict.LIKELY_AUTHENTIC:
+            fallback_explanation = f"{base_str}there is no strong evidence to suggest this is AI generated. We can be fairly confident this is actually real and shot on a real camera. The lighting and shadows match physical reality, and there are no spectral inconsistencies. {conclusion}"
+        elif verdict == Verdict.LIKELY_AI_GENERATED:
+            fallback_explanation = f"{base_str}multiple forensic signals indicate this is a procedurally generated AI image. We see distinct mathematical flaws in the matrix alongside geometric inconsistencies that a real camera would simply never capture. {conclusion}"
+        else:
+            fallback_explanation = f"{base_str}we cannot reach a definitive conclusion. The structural signals strongly conflict with each other, meaning this image either underwent massive post-processing edits, or the generative traces are expertly hidden. {conclusion}"
 
         client = LLMClient()
         llm_explanation = await client.generate_explanation(

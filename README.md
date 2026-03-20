@@ -22,6 +22,9 @@ Run the backend:
 ```
 .\.venv\Scripts\uvicorn backend.app.main:app --reload
 
+.\.venv\Scripts\uvicorn backend.app.main:app --reload
+
+
 
 Run the frontend:
 

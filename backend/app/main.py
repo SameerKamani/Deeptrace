@@ -14,6 +14,7 @@ from .detectors.registry import registry
 from .detectors.semantic import SemanticInconsistencyDetector
 from .detectors.ela import ErrorLevelAnalysisDetector
 from .detectors.spectral import SpectralArtifactDetector
+from .detectors.osint import OpenSourceIntelligenceDetector
 
 app = FastAPI(title=settings.project_name)
 pipeline = AnalysisPipeline()
@@ -33,6 +34,7 @@ def _register_detectors() -> None:
     registry.register(LightingConsistencyDetector())
     registry.register(SemanticInconsistencyDetector())
     registry.register(ErrorLevelAnalysisDetector())
+    registry.register(OpenSourceIntelligenceDetector())
 
 
 _register_detectors()
