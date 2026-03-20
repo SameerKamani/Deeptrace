@@ -1,62 +1,93 @@
 # DeepTrace Analysis Engine: Signal Master Library
 
+**✅ FULLY IMPLEMENTED** - All 7 signals are operational and integrated into the analysis pipeline.
+
 The DeepTrace Architecture does not rely on a single primitive "AI vs Real" classifier. Modern generative models (like Midjourney, Flux, and Sora) can easily defeat isolated checks by injecting artificial film grain or scrubbing frequency anomalies. 
 
 To achieve absolute reliability, DeepTrace utilizes a **Multi-Modal Forensics Pipeline**. It extracts 7 independent forensic Signals (ranging from invisible mathematical anomalies to live global web scraping), scoring each with a calculated `Reliability Weight`. A Central LLM Reasoning Engine then calculates the physical consensus.
 
 ---
 
+## Implementation Status
+
+All signals are implemented in `backend/app/detectors/` and run in parallel via `asyncio.gather()`:
+
+1. ✅ **Spectral Artifacts** (`spectral.py`) - CNN-based frequency analysis
+2. ✅ **Error Level Analysis** (`ela.py`) - JPEG compression artifact detection  
+3. ✅ **Thermal Noise & Sensor** (`noise.py`) - Variance and convolution analysis
+4. ✅ **Lighting Physics** (`lighting.py`) - Luminance topography analysis
+5. ✅ **Metadata Integrity** (`metadata.py`) - EXIF data parsing
+6. ✅ **Semantic Consistency** (`semantic.py`) - LLM vision analysis
+7. ✅ **Open Source Intelligence** (`osint.py`) - Web scraping verification
+
+---
+
 ## 1. Topographical & Frequency Signals
 ### Spectral Artifacts (`spectral.py`)
-* **Core Technology:** PyTorch Convolutional Neural Network (CNN) - `deeptrace_fuse_best.pt`
+* **Core Technology:** PyTorch Convolutional Neural Network (CNN) - `deeptrace_fuse_best/`
+* **Implementation:** Uses pre-trained model with `torch.load()` for frequency domain analysis
 * **How it Works:** Generative AI creates images procedurally (denoising step-by-step). This "upsampling" mathematically leaves invisible high-frequency "checkerboarding" in the Fourier frequency domain, completely invisible to the human eye. 
-* **Reliability (70-80%):** Extremely strong at catching standard GANs and older diffusion models. However, State-of-the-Art (SOTA) generative models are increasingly learning to filter these frequencies out, meaning we cannot rely on Spectral alone.
+* **Reliability (0.7-0.8):** Extremely strong at catching standard GANs and older diffusion models. However, State-of-the-Art (SOTA) generative models are increasingly learning to filter these frequencies out, meaning we cannot rely on Spectral alone.
 
 ### Error Level Analysis / ELA (`forensic.py`)
 * **Core Technology:** JPEG Recompression Delta Math
+* **Implementation:** PIL-based recompression at 90% quality with numpy subtraction
 * **How it Works:** Real photographs compress at uniform rates based on optical complexity. ELA re-saves an image at 90% quality and subtracts it from the original. Edited or AI-spliced images will reveal massive glowing edge anomalies in the generated "Heatmap" because their localized compression artifacts are mismatched.
-* **Reliability (40-60%):** Great for catching "photoshopped" or altered authentic images (like pasting a fake face onto a real body). Weak against 100% cleanly generated virgin AI images.
+* **Reliability (0.4-0.6):** Great for catching "photoshopped" or altered authentic images (like pasting a fake face onto a real body). Weak against 100% cleanly generated virgin AI images.
 
 ---
 
 ## 2. Optical Physics & Hardware Constraints
 ### Thermal Noise & Sensor Consistency (`noise.py`)
 * **Core Technology:** Mathematical Variance & Laplacian Convolution Matrices
+* **Implementation:** Uses `cv2.Laplacian()` and numpy variance calculations
 * **How it Works:** Real optical cameras possess CCD/CMOS sensors that generate physical heat. This leaves a uniform, globally consistent "thermal grain" across every pixel. Procedural AI creates mathematically perfect gradients, resulting in spatial "dead zones" of zero variance. 
 * **The Counter-Attack:** SOTA AI now injects "simulated film grain". The engine counters this by checking the total standard deviation; if artificial noise is purely uniform but lacks optical depth variation, the engine flags it.
-* **Reliability (50-70%):** Highly reliable against smooth AI generations, but easily confused by low-light authentic smartphone photos or heavy noise-reduction filters.
+* **Reliability (0.5-0.7):** Highly reliable against smooth AI generations, but easily confused by low-light authentic smartphone photos or heavy noise-reduction filters.
 
 ### Lighting Physics & Contrast Geometry (`lighting.py`)
 * **Core Technology:** Luminance Topography (Grayscale Histograms)
+* **Implementation:** PIL grayscale conversion with numpy histogram analysis
 * **How it Works:** Real-world light follows the inverse-square law. Generative AI frequently struggles with extreme dynamic range, relying on mathematically constrained "HDR" aesthetics. DeepTrace measures crushed blacks (pixel value 0) against clipped highlights (pixel value 255) to see if the global illumination profile physically obeys geometry.
-* **Reliability (30-50%):** Used mostly as a supporting signal. Heavily manipulated studio photography can trigger false positives here.
+* **Reliability (0.3-0.5):** Used mostly as a supporting signal. Heavily manipulated studio photography can trigger false positives here.
 
 ---
 
 ## 3. Provenance & Logic 
 ### Metadata Integrity (`metadata.py`)
 * **Core Technology:** ExifTag Parsing
+* **Implementation:** Uses `PIL.ExifTags` and `PIL.Image` metadata extraction
 * **How it Works:** Extracts embedded raw strings from the image. Authentic images carry Apple/Samsung hardware IDs, GPS tags, and shutter speeds. AI images have absolutely nothing, or explicitly read "Generated by Midjourney".
-* **Reliability (10-100%):** If it literally says "Generated by AI", reliability is 100%. If metadata is simply blank, reliability ranks lower (30%), because social media websites (like Twitter/Instagram) completely obliterate EXIF tags during upload compression.
+* **Reliability (0.1-1.0):** If it literally says "Generated by AI", reliability is 1.0. If metadata is simply blank, reliability ranks lower (0.3), because social media websites (like Twitter/Instagram) completely obliterate EXIF tags during upload compression.
 
 ### Semantic & Physical Consistency (`semantic.py`)
 * **Core Technology:** Advanced Multi-Modal LLM Vision (Gemini 3.0 Flash)
+* **Implementation:** Uses `google-generativeai` SDK with structured prompts
 * **How it Works:** The primary counter-measure to flawless AI math. A pure AI image might fake thermal noise and frequency correctly, but the Semantic engine looks at the *logic*. It actively hunts for non-Euclidean background geometry, 6-fingered hands, gibberish street signs, impossible shadows, and warped pupil reflections.
-* **Reliability (80-90%):** The heavy-lifter. Generative AI fundamentally does not understand 3D space, it only predicts 2D pixels. This engine mercilessly attacks the lack of physical logic.
+* **Reliability (0.8-0.9):** The heavy-lifter. Generative AI fundamentally does not understand 3D space, it only predicts 2D pixels. This engine mercilessly attacks the lack of physical logic.
 
 ---
 
 ## 4. The Reality Anchor: Live OSINT
 ### Open Source Intelligence / Fact-Checking (`osint.py`)
 * **Core Technology:** Multi-Vector Dynamic DDGS Web Scraping & Deep Context Synthesis
+* **Implementation:** Uses `duckduckgo-search` with LLM-generated search queries
 * **How it Works:** The "Investigative Journalist" module. 
     1. If the image depicts a generic coffee cup, it skips. 
     2. If it depicts a famous politician, celebrity, or specific viral event (e.g., "The Pope in a Puffer Jacket"), it uses an LLM to generate **3 specific search angles** (chronology check, debunk check, broad entity location check).
     3. It stealthily scrapes the open internet, ripping article bodies from the top 15 global news results.
     4. It synthesizes this massive text block, explicitly analyzing if credible news outlets or Snopes have already debunked the image as a viral deepfake, or verified it as a true press photo.
-* **Reliability (95%):** Irrefutable contextual anchoring. Even if a deepfake is mathematically and semantically perfect, if the global internet confirms the event physically never happened, the system overrides the visual math entirely.
+* **Reliability (0.95):** Irrefutable contextual anchoring. Even if a deepfake is mathematically and semantically perfect, if the global internet confirms the event physically never happened, the system overrides the visual math entirely.
 
 ---
 
-### The Verdict Engine (engine.py)
+## The Verdict Engine (engine.py)
+**Implementation:** `backend/app/reasoning/engine.py`
+
 Once all 7 signals are extracted, the `ReasoningEngine` aggregates their raw weights based on their individual reliabilities. If the AI score outweighs the Authentic score heavily, it declares `LIKELY_AI_GENERATED`. It then pipes the raw math into the final Executive LLM to generate the warm, human-readable paragraph that explains exactly *why* the physics failed.
+
+**Current Verdict Logic:**
+- Aggregate reliability scores for authentic vs AI-generated evidence
+- Handle conflicts with INCONCLUSIVE verdicts when scores are balanced
+- Generate explanations via LLM with fallback templates
+- Always provide reasoning, never just a probability score

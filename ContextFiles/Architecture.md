@@ -1,8 +1,23 @@
 # DeepTrace System Architecture
 
-This document describes the conceptual architecture and development direction of DeepTrace.
+This document describes the conceptual architecture and **current implementation** of DeepTrace.
 
-It intentionally avoids low-level implementation details so the system can evolve without the documentation becoming outdated.
+---
+
+## Current Implementation Status
+
+**✅ Fully Implemented Architecture**
+
+The system described in this document has been built and is operational:
+
+- **FastAPI Backend** (`backend/app/main.py`) - Async REST API with CORS
+- **React Frontend** (`frontend/src/App.jsx`) - Modern UI with Vite
+- **7 Production Detectors** in `backend/app/detectors/`
+- **Async Pipeline** (`backend/app/core/pipeline.py`) with parallel processing
+- **LLM Reasoning Engine** (`backend/app/reasoning/engine.py`)
+- **Evidence Models** (`backend/app/models/`) with Pydantic validation
+- **Performance Logging** (`logs/xray/`) for monitoring
+- **Environment Configuration** with API key management
 
 ---
 
@@ -15,90 +30,103 @@ The system analyzes an input image using multiple independent detectors, aggrega
 The architecture separates three key responsibilities:
 
 1. Evidence extraction
-2. Evidence aggregation
+2. Evidence aggregation  
 3. Reasoning and explanation
 
 ---
 
 # Core Pipeline
 
+**Implemented in:** `backend/app/core/pipeline.py`
+
 The high-level pipeline is:
 
-Image Input  
-→ Preprocessing  
-→ Parallel Evidence Extraction  
-→ Evidence Aggregation  
-→ Reasoning Engine  
-→ Forensic Report  
-→ Frontend Visualization
+Image Input (FastAPI UploadFile)  
+→ Image Preprocessing (PIL RGB conversion)  
+→ **Parallel Evidence Extraction** (asyncio.gather)  
+→ Evidence Aggregation (EvidenceProfile)  
+→ **LLM Reasoning Engine** (Gemini/Groq)  
+→ Forensic Report (Pydantic model)  
+→ Frontend Visualization (React components)
 
-Each stage operates independently and should remain modular.
+**Current Implementation Details:**
+- All 7 detectors run concurrently using `asyncio.gather()`
+- Each detector is wrapped with error handling and performance tracking
+- X-ray logging captures execution times and crash information
+- Evidence is structured using Pydantic models for validation
+- Reasoning engine aggregates reliability scores for verdict calculation
 
 ---
 
 # Evidence Extraction
 
+**Implemented in:** `backend/app/detectors/`
+
 Evidence extraction modules analyze the image and generate structured signals.
 
-These modules operate independently and should run in parallel.
+These modules operate independently and run in parallel using asyncio.
 
-Examples of signal categories include:
+**Currently Implemented Detectors:**
 
-### Spectral Analysis
+### Spectral Analysis (`spectral.py`)
 Detection of frequency artifacts often associated with generative models.
+- Uses PyTorch CNN model (`deeptrace_fuse_best/`)
+- Detects upsampling patterns and diffusion artifacts
 
-Examples:
-- upsampling patterns
-- periodic frequency peaks
-- diffusion artifacts
-
-### Metadata and Provenance
+### Metadata and Provenance (`metadata.py`)  
 Analysis of file metadata and provenance signals.
+- EXIF data extraction and validation
+- Camera hardware identification
+- Editing trace detection
 
-Examples:
-- camera metadata
-- editing traces
-- missing or inconsistent EXIF data
-- cryptographic provenance standards
-
-### Noise and Texture Analysis
+### Noise and Texture Analysis (`noise.py`)
 Comparison of image noise characteristics against expected camera sensor patterns.
+- Thermal variance analysis using Laplacian convolution
+- Sensor consistency verification
+- Artificial noise detection
 
-Examples:
-- inconsistent noise distribution
-- overly smooth textures
-- unnatural noise characteristics
-
-### Lighting and Physical Consistency
+### Lighting and Physical Consistency (`lighting.py`)
 Evaluation of whether lighting and shadows obey physical rules.
+- Luminance topography analysis
+- Dynamic range evaluation
+- Shadow direction consistency
 
-Examples:
-- inconsistent shadow direction
-- missing reflections
-- mismatched illumination
+### Semantic and Physical Consistency (`semantic.py`)
+**LLM-powered** detection of logical and physical impossibilities.
+- Uses Gemini 3.0 Flash for vision analysis
+- Detects anatomical anomalies, impossible geometry
+- Identifies non-Euclidean spatial violations
 
-### Anatomical and Structural Signals
-Detection of anomalies in human anatomy or object structure.
+### Error Level Analysis (`ela.py`)
+JPEG recompression analysis for detecting edited regions.
+- Generates ELA heatmaps
+- Identifies compression artifact inconsistencies
+- Effective for detecting spliced images
 
-Examples:
-- warped hands or fingers
-- inconsistent facial symmetry
-- unnatural geometry
+### Open Source Intelligence (`osint.py`)
+Live web scraping for fact-checking and verification.
+- Uses DuckDuckGo search with LLM-generated queries
+- Cross-references with news sources and debunking sites
+- Provides contextual verification
 
 ---
 
 # Evidence Signals
 
+**Implemented in:** `backend/app/models/evidence.py`
+
 Every detector produces structured evidence rather than final conclusions.
 
-Evidence signals should contain:
-
-- signal name
-- status or classification
-- supporting observations
-- estimated reliability
-- optional confidence score
-- contextual notes
+**Current EvidenceSignal Structure:**
+- `id`: Stable detector identifier (string)
+- `name`: Human-readable signal name (string)  
+- `category`: Signal category (string)
+- `status`: One of `ok`, `warning`, `unavailable`, `error`
+- `reliability`: Estimated reliability between `0.0` and `1.0`
+- `summary`: Short summary of observations
+- `observations`: List of specific observations (strings)
+- `supports`: One of `authentic`, `ai_generated`, `inconclusive`, `unknown`
+- `metrics`: Optional structured measurements
 
 The goal is to capture **what was observed**, not just a verdict.
 
@@ -106,26 +134,33 @@ The goal is to capture **what was observed**, not just a verdict.
 
 # Evidence Aggregation
 
-All signals are aggregated into a unified **Evidence Profile**.
+**Implemented in:** `backend/app/core/pipeline.py`
+
+All signals are aggregated into a unified **EvidenceProfile**.
 
 The evidence profile represents the system's complete understanding of the image.
 
 This profile becomes the input to the reasoning system.
 
-The aggregation stage should not attempt to produce narrative explanations.
-
-It simply organizes and standardizes evidence.
+The aggregation stage simply organizes and standardizes evidence without producing narrative explanations.
 
 ---
 
 # Reasoning Layer
 
+**Implemented in:** `backend/app/reasoning/engine.py`
+
 A reasoning engine interprets the evidence profile and produces a human-readable explanation.
 
-The reasoning system should behave similarly to a forensic analyst:
+**Current Implementation:**
+- Reliability scores are aggregated for `authentic` vs `ai_generated` support
+- Verdict logic handles conflicting evidence with `INCONCLUSIVE` outcomes
+- LLM client (Gemini/Groq) generates human-readable explanations
+- Fallback explanations ensure system always produces output
 
+The reasoning system behaves similarly to a forensic analyst:
 - identifying patterns
-- explaining contradictions
+- explaining contradictions  
 - highlighting strong signals
 - acknowledging uncertainty
 
@@ -135,13 +170,21 @@ The reasoning engine converts structured evidence into a narrative explanation.
 
 # Verdict Logic
 
-The system should support three possible conclusions:
+**Implemented in:** `backend/app/reasoning/engine.py`
+
+The system supports three possible conclusions:
 
 Likely authentic  
 Likely AI-generated  
 Inconclusive
 
-The system must never force a conclusion when signals conflict.
+**Current Verdict Algorithm:**
+- Aggregate reliability scores for authentic vs AI-generated support
+- If both scores > 0.4 and difference < 0.25 → INCONCLUSIVE
+- If one score > 0.4 and dominates → corresponding verdict
+- If scores are balanced or weak → INCONCLUSIVE
+
+The system never forces a conclusion when signals conflict.
 
 Inconclusive outcomes are an essential part of ethical design.
 
@@ -149,38 +192,53 @@ Inconclusive outcomes are an essential part of ethical design.
 
 # Frontend Visualization
 
-The user interface should present analysis results clearly and transparently.
+**Implemented in:** `frontend/src/App.jsx`
 
-Recommended interface elements include:
+The user interface presents analysis results clearly and transparently.
 
-- uploaded image display
-- final verdict
-- evidence cards for each signal
-- explanation narrative
-- optional visual overlays or analysis graphics
-- transparency indicators describing signal reliability
+**Current Interface Components:**
+- Image upload and display
+- Final verdict display with confidence indicators
+- Evidence cards for each signal with reliability scores
+- Detailed explanation narrative from LLM reasoning
+- Signal status indicators (ok/warning/unavailable/error)
+- Responsive design with modern UI framework
 
-The interface should emphasize clarity and trust.
+The interface emphasizes clarity and trust by exposing the reasoning process.
 
 ---
 
 # Parallel Signal Processing
 
-Evidence extraction modules should run concurrently whenever possible.
+**Implemented in:** `backend/app/core/pipeline.py`
+
+Evidence extraction modules run concurrently using `asyncio.gather()`.
+
+**Current Implementation:**
+- All 7 detectors execute in parallel
+- Individual error handling prevents cascade failures
+- Performance tracking captures execution times per detector
+- X-ray logging provides detailed timing diagnostics
 
 Parallel analysis improves responsiveness and allows the system to scale as additional detectors are added.
 
-The architecture should assume that future signal modules may be added dynamically.
+The architecture supports dynamic addition of new signal modules through the detector registry.
 
 ---
 
 # Modular Design
 
-DeepTrace must remain modular.
+**Implemented in:** `backend/app/detectors/registry.py`
 
-New detectors should be easily integrated without modifying existing system components.
+DeepTrace maintains modular detector architecture.
 
-The architecture should treat detectors as plug-in analysis modules.
+**Current Implementation:**
+- Base detector class (`base.py`) defines interface
+- Registry pattern allows dynamic detector registration
+- Each detector is independent with standardized interface
+- New detectors can be added without modifying core pipeline
+
+The architecture treats detectors as plug-in analysis modules.
 
 This allows the system to evolve as new detection techniques emerge.
 
@@ -188,7 +246,7 @@ This allows the system to evolve as new detection techniques emerge.
 
 # Future Extension: Video
 
-Although DeepTrace currently analyzes images, the architecture should support expansion to video analysis.
+Although DeepTrace currently analyzes images, the architecture supports expansion to video analysis.
 
 Video analysis can be achieved by applying the image pipeline to extracted frames and adding temporal consistency analysis.
 
