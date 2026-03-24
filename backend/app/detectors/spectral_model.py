@@ -109,39 +109,104 @@ class SpectralFusionModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.gray_weights = nn.Parameter(torch.ones(1, 3, 1, 1))
+        
+        # 1. Semantic Branch (ConvNeXt)
         self.semantic_branch = SemanticBranch(
             dims=(96, 192, 384, 768),
             depths=(3, 3, 27, 3),
         )
+        
+        # 2. Spectral Branch (FFT)
         self.spectral_branch = nn.Sequential(
+            nn.Flatten(1),
             nn.Identity(),
-            nn.Identity(),
-            nn.Linear(4096, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
-            nn.Linear(512, 256),
+            nn.Linear(4096, 256)
         )
+        
+        # 3. SRM Branch
+        self.srm_conv = nn.Conv2d(1, 3, kernel_size=5, padding=2, bias=False)
+        self.srm_branch = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((16, 16)),
+            nn.Flatten(1),
+            nn.Linear(8192, 256)
+        )
+        
+        # 4. Chroma Branch
+        self.chroma_branch = nn.Sequential(
+            nn.Conv2d(2, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((32, 32)),
+            nn.Flatten(1),
+            nn.Linear(16384, 128)
+        )
+        
+        # 5. SPAI Branch
+        self.spai_branch = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((32, 32)),
+            nn.Flatten(1),
+            nn.Linear(32768, 256)
+        )
+        
+        # 6. Robustness Branch
+        self.robustness_branch = nn.Sequential(
+            nn.Linear(768, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128)
+        )
+
+        # Final Fusion Head
         self.fusion_head = nn.Sequential(
-            nn.Linear(1024, 512),
+            nn.Linear(1792, 1024),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.2),
-            nn.Linear(512, 2),
+            nn.Linear(1024, 2),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Semantic branch
+        # 1. Semantic
         semantic_features = self.semantic_branch(x)
 
-        # Spectral branch
+        # Compute Gray for FFT, SRM, and SPAI
         gray = (x * self.gray_weights).sum(dim=1, keepdim=True)
+        
+        # 2. Spectral (FFT)
         fft = torch.fft.fft2(gray)
         magnitude = torch.abs(fft)
         magnitude = torch.log1p(magnitude)
         magnitude = F.interpolate(magnitude, size=(64, 64), mode="bilinear", align_corners=False)
-        spectral_vec = magnitude.flatten(1)
-        spectral_features = self.spectral_branch(spectral_vec)
+        spectral_features = self.spectral_branch(magnitude)
+        
+        # 3. SRM
+        srm_residuals = self.srm_conv(gray) 
+        srm_features = self.srm_branch(srm_residuals)
+        
+        # 4. Chroma (YcbCr approximation)
+        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
+        cb = -0.1687 * r - 0.3313 * g + 0.5 * b
+        cr = 0.5 * r - 0.4187 * g - 0.0813 * b
+        chroma = torch.cat([cb, cr], dim=1)
+        chroma_features = self.chroma_branch(chroma)
+        
+        # 5. SPAI
+        spai_features = self.spai_branch(gray)
+        
+        # 6. Robustness
+        robustness_features = self.robustness_branch(semantic_features)
 
-        fused = torch.cat([semantic_features, spectral_features], dim=1)
+        # Fuse
+        fused = torch.cat([
+            semantic_features,    # 768
+            spectral_features,    # 256
+            srm_features,         # 256
+            chroma_features,      # 128
+            spai_features,        # 256
+            robustness_features   # 128
+        ], dim=1)                 # Total: 1792
+        
         return self.fusion_head(fused)
 
 
