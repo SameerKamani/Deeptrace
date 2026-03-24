@@ -1,12 +1,12 @@
 {
-    "timestamp": "2026-03-20T13:12:36.747392+00:00",
-    "image_hash": "faaef8bd9554c36eb6f50c25bf2e7a5c5b177a1c47693e55a6c65c29f904a6a3",
-    "global_execution_time": 25.7012,
-    "reasoning_execution_time": 0.6798,
+    "timestamp": "2026-03-24T04:59:37.226746+00:00",
+    "image_hash": "32a9369613707d01861701b6a1c64bad2de0b32b56a791f72b1d38587b446fb8",
+    "global_execution_time": 26.9175,
+    "reasoning_execution_time": 1.1491,
     "detector_metrics": {
         "spectral_artifacts": {
             "status": "ok",
-            "time_seconds": 9.8179,
+            "time_seconds": 11.7828,
             "reliability": 0.7
         },
         "metadata_analysis": {
@@ -16,28 +16,28 @@
         },
         "noise_pattern_analysis": {
             "status": "ok",
-            "time_seconds": 0.0234,
-            "reliability": 0.2
+            "time_seconds": 0.1341,
+            "reliability": 0.55
         },
         "lighting_consistency": {
             "status": "ok",
-            "time_seconds": 0.0069,
+            "time_seconds": 0.0325,
             "reliability": 0.3
         },
         "error_level_analysis": {
             "status": "ok",
-            "time_seconds": 0.2205,
+            "time_seconds": 1.4931,
             "reliability": 0.25
+        },
+        "osint_verification": {
+            "status": "warning",
+            "time_seconds": 10.1032,
+            "reliability": 0.1
         },
         "semantic_inconsistencies": {
             "status": "ok",
-            "time_seconds": 10.5614,
-            "reliability": 0.4
-        },
-        "osint_verification": {
-            "status": "error",
-            "time_seconds": 14.713,
-            "reliability": 0.0
+            "time_seconds": 13.7027,
+            "reliability": 0.9
         }
     },
     "final_verdict": "likely_ai_generated"

@@ -108,7 +108,8 @@ class SemanticBranch(nn.Module):
 class SpectralFusionModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.gray_weights = nn.Parameter(torch.ones(1, 3, 1, 1))
+        # Standard RGB to Grayscale Luma Weights (BT.601)
+        self.gray_weights = nn.Parameter(torch.tensor([[[[0.299]], [[0.587]], [[0.114]]]]), requires_grad=False)
         
         # 1. Semantic Branch (ConvNeXt)
         self.semantic_branch = SemanticBranch(

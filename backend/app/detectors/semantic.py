@@ -51,20 +51,32 @@ class SemanticInconsistencyDetector(Detector):
             confidence = parsed.get("confidence")
             summary = parsed.get("summary", "Semantic analysis completed.")
             observations = [str(item) for item in anomalies] if anomalies else ["No obvious semantic anomalies reported."]
-        except json.JSONDecodeError:
+        except Exception:
             summary = "Gemini responded, but output was not valid JSON."
             observations = [raw_text[:300]]
+            
+        supports = SignalSupport.UNKNOWN
+        final_reliability = 0.4
+        
+        if confidence is not None:
+            if confidence >= 0.5:
+                supports = SignalSupport.AI_GENERATED
+                if confidence > 0.9:
+                    # An explicit reasoning like catching a watermark should override doubt
+                    final_reliability = 0.9
+            elif confidence <= 0.3:
+                supports = SignalSupport.AUTHENTIC
 
         return EvidenceSignal(
             id=self.id,
             name=self.name,
             category=self.category,
             status=SignalStatus.OK,
-            reliability=0.4,
+            reliability=final_reliability,
             summary=summary,
             observations=observations,
             metrics={"confidence_raw": confidence},
             confidence=confidence,
-            supports=SignalSupport.UNKNOWN,
+            supports=supports,
             notes="LLM-based semantic reasoning. Treat as advisory evidence.",
         )
