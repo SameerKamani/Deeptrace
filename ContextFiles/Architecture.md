@@ -302,3 +302,10 @@ What does that evidence imply?
 Where are the uncertainties?
 
 This philosophy guides every component of the system.
+## Recent Updates (2026-03-24)
+
+- **Six‑Lens Spectral Model** – `SpectralFusionModel` now implements six parallel branches (ConvNeXt, FFT, SRM, Chroma (YCbCr), SPAI, Robustness) with a 1792‑dim fusion head.
+- **Grayscale conversion** – Updated to BT.601 luma weights (`0.299, 0.587, 0.114`).
+- **Environment** – `SPECTRAL_AI_INDEX=0` to match fine‑tuned model.
+- **Semantic Detector** – Added confidence‑driven `supports` mapping and reliability boost to 0.9 when watermark detected.
+- **Verification script** – `test_full_model.py` validates model loading and inference.

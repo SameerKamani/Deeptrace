@@ -89,3 +89,11 @@ The system requires API keys for LLM reasoning:
 - ELA heatmaps are generated as part of the forensic signals and included in the response.
 - All detectors run in parallel with performance tracking logged to `logs/xray/`.
 - The system produces three possible verdicts: `LIKELY_AUTHENTIC`, `LIKELY_AI_GENERATED`, or `INCONCLUSIVE`.
+## Recent Updates (2026-03-24)
+
+- **Six‑Lens Spectral Model** – `SpectralFusionModel` now implements six parallel branches (ConvNeXt, FFT, SRM, Chroma (YCbCr), SPAI, Robustness) and a 1792‑dim fusion head. The model loads cleanly from `deeptrace_fuse_best/`.
+- **Grayscale conversion** – Uses BT.601 luma weights (`0.299, 0.587, 0.114`) instead of uniform ones.
+- **Environment** – `SPECTRAL_AI_INDEX` set to `0` to match the fine‑tuned model’s class ordering.
+- **Semantic Detector** – LLM prompt now explicitly checks for AI watermarks; confidence‑driven `supports` mapping added.
+- **Reliability weighting** – Semantic signal reliability boosts to `0.9` when confidence > 0.9 (e.g., watermark detection).
+- **Verification script** – `test_full_model.py` validates weight loading and forward pass.
