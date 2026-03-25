@@ -65,6 +65,8 @@ This repo includes `render.yaml` (Blueprint): one **Python web service** (`deept
 
 **Notes:** Free instances sleep when idle (cold start). PyTorch plus the spectral model can be tight on memory; if the backend crashes on analyze, upgrade the web service plan or consider hosting the spectral model elsewhere. Ensure `deeptrace_fuse_best` (and weight files) are in the deployed branch if you want the spectral detector on; `*.pth` is gitignored locally—use Git LFS or another asset strategy if weights are not in the repo.
 
+Render’s default Python is often **3.14+**; `pydantic-core` may then build from source (Rust) and fail on their builders. This repo includes **`.python-version`** (`3.12`) so pip installs wheels. Alternatively set **`PYTHON_VERSION`** on the web service to a full version like `3.12.8` (overrides the file).
+
 ## API (testing)
 
 - `POST /sessions` — create a session id (in-memory).
