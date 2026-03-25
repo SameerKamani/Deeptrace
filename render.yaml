@@ -1,7 +1,7 @@
 services:
   - type: web
     name: deeptrace-backend
-    env: python
+    runtime: python
     plan: free
     buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r backend/requirements.txt
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
@@ -16,9 +16,9 @@ services:
       - key: SPECTRAL_NORMALIZE
         value: "1"
 
-  - type: static
+  - type: web
     name: deeptrace-frontend
-    env: static
+    runtime: static
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
