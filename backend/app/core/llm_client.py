@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
 
@@ -37,6 +38,171 @@ class LLMClient:
         if last_exception:
             raise last_exception
         raise ValueError("No Gemini keys configured or all exhausted.")
+
+    def _extract_json_object(self, text: str) -> Optional[Dict[str, Any]]:
+        if not text:
+            return None
+        t = text.strip()
+        t = t.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        try:
+            obj = json.loads(t)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        m = re.search(r"\{[\s\S]*\}", t)
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+                if isinstance(obj, dict):
+                    return obj
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    async def grounded_osint_investigation(
+        self,
+        image_bytes: bytes,
+        user_context: str,
+    ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+        if not llm_settings.gemini_api_key:
+            return None
+
+        ctx = (user_context or "").strip()
+        extra = (
+            f"\n\nUser-provided context (treat as investigative hints, not proof): {ctx}"
+            if ctx
+            else ""
+        )
+        prompt = (
+            "You are a lead forensic journalist with access to Google Search. "
+            "Examine the image. Use search to determine whether this image aligns with verified real-world reporting "
+            "or is widely described as fabricated, AI-generated, or a known deepfake."
+            + extra
+            + "\n\nAfter searching, respond with ONLY a single JSON object (no markdown fences) using exactly these keys:\n"
+            "- known_deepfake (boolean): true only if credible reporting or fact-checkers say this depiction is fake, AI, or misleading.\n"
+            "- verified_real (boolean): true only if credible outlets corroborate the depicted situation as real.\n"
+            "- context (string): 3-5 sentences summarizing what you found and naming sources at a high level.\n"
+            "If the scene is generic with no identifiable public story, set both booleans false and explain in context."
+        )
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/png",
+                                "data": base64.b64encode(image_bytes).decode("utf-8"),
+                            }
+                        },
+                    ]
+                }
+            ],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"temperature": 0.2},
+        }
+        headers = {"Content-Type": "application/json"}
+        params = {"key": llm_settings.gemini_api_key}
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            try:
+                response = await self._post_with_fallback(
+                    client,
+                    llm_settings.gemini_grounding_model,
+                    headers,
+                    params,
+                    payload,
+                )
+                data = response.json()
+            except Exception:
+                return None
+
+        try:
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError):
+            return None
+
+        cand0 = data["candidates"][0]
+        meta = cand0.get("groundingMetadata") or cand0.get("grounding_metadata") or {}
+        parsed = self._extract_json_object(text)
+        if not parsed:
+            return None
+        out = {
+            "known_deepfake": bool(parsed.get("known_deepfake")),
+            "verified_real": bool(parsed.get("verified_real")),
+            "context": str(parsed.get("context") or "").strip(),
+            "grounded_text": text.strip(),
+        }
+        meta_out = meta if isinstance(meta, dict) else {}
+        return out, meta_out
+
+    async def followup_answer(
+        self,
+        user_message: str,
+        verdict: str,
+        evidence: Dict[str, Any],
+    ) -> Optional[str]:
+        system = (
+            "You are DeepTrace, a forensic assistant. The user already received a structured analysis. "
+            "Answer follow-up questions only using the provided evidence JSON and verdict. "
+            "If the question cannot be answered from that evidence, say so clearly. "
+            "Be conversational, concise (2-6 sentences), and avoid inventing new forensic claims."
+        )
+        user = f"Verdict: {verdict}\n\nEvidence JSON:\n{json.dumps(evidence, indent=2)}\n\nUser question:\n{user_message}"
+
+        async def groq_reply() -> Optional[str]:
+            if not llm_settings.groq_api_key:
+                return None
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            hdrs = {"Authorization": f"Bearer {llm_settings.groq_api_key}"}
+            payload = {
+                "model": llm_settings.groq_model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "temperature": 0.2,
+                "max_tokens": min(llm_settings.explanation_max_tokens, 768),
+            }
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                try:
+                    response = await client.post(url, headers=hdrs, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                except Exception:
+                    return None
+
+        async def gemini_reply() -> Optional[str]:
+            if not llm_settings.gemini_api_key:
+                return None
+            payload = {
+                "contents": [{"parts": [{"text": system + "\n\n" + user}]}],
+                "generationConfig": {"temperature": 0.2},
+            }
+            headers = {"Content-Type": "application/json"}
+            params = {"key": llm_settings.gemini_api_key}
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                try:
+                    response = await self._post_with_fallback(client, llm_settings.gemini_model, headers, params, payload)
+                    data = response.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                except Exception:
+                    return None
+
+        if llm_settings.explanation_provider == "groq":
+            out = await groq_reply()
+            if out:
+                return out
+            return await gemini_reply()
+
+        out = await gemini_reply()
+        if out:
+            return out
+        return await groq_reply()
+
     async def generate_explanation(
         self, verdict: str, evidence: Dict[str, Any]
     ) -> Optional[str]:
@@ -102,13 +268,22 @@ class LLMClient:
         except (KeyError, IndexError, TypeError):
             return None
 
-    async def generate_osint_search_queries(self, image_bytes: bytes) -> Optional[list[str]]:
+    async def generate_osint_search_queries(
+        self, image_bytes: bytes, user_context: str = ""
+    ) -> Optional[list[str]]:
         if not llm_settings.gemini_api_key:
             return None
 
+        uc = (user_context or "").strip()
+        hint = (
+            f"\n\nThe user added this context (use it to sharpen queries): {uc}\n"
+            if uc
+            else ""
+        )
         prompt = (
             "You are an elite investigative journalist and digital forensics expert. Examine this image carefully. "
-            "If it depicts a generic scene (unidentifiable people, random landscape, generic stock photo), reply strictly with: [\"GENERIC_SCENE\"]\n\n"
+            + hint
+            + "If it depicts a generic scene (unidentifiable people, random landscape, generic stock photo), reply strictly with: [\"GENERIC_SCENE\"]\n\n"
             "If it depicts recognizable public figures, politicians, specific geopolitical events, viral moments, or highly specific contexts, "
             "write exactly 3 highly targeted Google search queries to investigate the authenticity of this event. Your angles should be:\n"
             "1. A direct chronological news search for the specific event depicted.\n"
@@ -164,15 +339,17 @@ class LLMClient:
 
     def _get_reasoner_system_prompt(self) -> str:
         return (
-            "You are an expert digital forensics assistant, but your goal is to explain things to the user in a very "
-            "simple, friendly, and human-sounding way (like a smart chatbot or a helpful friend). "
-            "Your assignment is to read the provided Evidence Profile JSON containing math signals and Write a cohesive, "
-            "flowing paragraph explaining the final verdict.\n\n"
+            "You are a senior digital forensic analyst writing the narrative section of a formal verification report "
+            "for investigators, editors, or legal readers. Read the Evidence Profile JSON (multiple independent signals) "
+            "and explain why the stated verdict was reached.\n\n"
             "RULES:\n"
-            "1. Tone: Conversational, clear, and very human. Do not sound like a robot. Speak like this: 'There is no evidence to suggest this is AI generated. We can be fairly confident this is actually real...'\n"
-            "2. Integration: Weave the technical signals (Lighting, Semantic, Noise, ELA, Spectral, OSINT News) naturally into your paragraph. For example, 'It is suspicious how there is a missing shadow, but that can be explained by...' or 'Furthermore, live web search shows how there are eyewitness reports...'\n"
-            "3. Format: Return a single, beautifully written 1-2 paragraph response. Do not use bullet points or harsh structural headers.\n"
-            "4. Truth: Never invent evidence. Only discuss the flags/signals present in the JSON."
+            "1. Tone: Professional, plain language, calm. No hype, no claiming certainty beyond the verdict. If the verdict "
+            "is inconclusive, explain the conflict between signals clearly.\n"
+            "2. Integration: Walk through the most consequential signals by name (e.g. semantic consistency, spectral, "
+            "noise, metadata, ELA, lighting, OSINT). Connect each to what it suggests and its limitations where the JSON implies them.\n"
+            "3. Length: Write two to four substantial paragraphs (not one short blurb). No bullet lists or numbered lists; "
+            "use connected prose.\n"
+            "4. Truth: Never invent observations. Only reference signals and fields present in the JSON."
         )
 
     async def _groq_explanation(self, verdict: str, evidence: Dict[str, Any]) -> Optional[str]:

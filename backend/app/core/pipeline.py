@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from PIL import Image
 
@@ -26,7 +26,7 @@ class AnalysisPipeline:
     def __init__(self) -> None:
         self.reasoning = ReasoningEngine()
 
-    async def analyze(self, image_bytes: bytes) -> ForensicReport:
+    async def analyze(self, image_bytes: bytes, user_context: Optional[str] = None) -> ForensicReport:
         global_start = time.perf_counter()
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
         image_info = ImageInfo(
@@ -40,6 +40,7 @@ class AnalysisPipeline:
         context: Dict[str, Any] = {
             "image_info": image_info,
             "image_bytes": image_bytes,
+            "user_context": (user_context or "").strip(),
         }
         detectors = registry.all()
 
