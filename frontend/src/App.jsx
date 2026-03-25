@@ -441,31 +441,34 @@ export default function App() {
     return () => clearInterval(id);
   }, [isAnalyzing]);
 
+  const createFreshSession = useCallback(async () => {
+    const res = await fetch(`${API_BASE}/sessions`, { method: "POST" });
+    if (!res.ok) throw new Error("session_create_failed");
+    const data = await res.json();
+    setSessionId(data.session_id);
+    return data.session_id;
+  }, []);
+
+  const ensureSession = useCallback(async () => {
+    if (sessionId) return sessionId;
+    return createFreshSession();
+  }, [sessionId, createFreshSession]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res  = await fetch(`${API_BASE}/sessions`, { method: "POST" });
-        const data = await res.json();
-        if (!cancelled) setSessionId(data.session_id);
+        await createFreshSession();
       } catch {
         if (!cancelled) setSessionError("Could not reach the API. Check backend and VITE_API_BASE.");
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [createFreshSession]);
 
   useEffect(() => {
     feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, status]);
-
-  const ensureSession = useCallback(async () => {
-    if (sessionId) return sessionId;
-    const res  = await fetch(`${API_BASE}/sessions`, { method: "POST" });
-    const data = await res.json();
-    setSessionId(data.session_id);
-    return data.session_id;
-  }, [sessionId]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -502,18 +505,37 @@ export default function App() {
     const imageSnapshot = previewUrl;
 
     try {
-      const sid = await ensureSession();
-      const fd  = new FormData();
-      fd.append("file", file);
-      fd.append("context", contextText.trim());
+      const postAnalyze = (sessionKey) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("context", contextText.trim());
+        return fetch(`${API_BASE}/sessions/${sessionKey}/analyze`, { method: "POST", body: fd });
+      };
+
+      let sid = await ensureSession();
 
       setMessages((prev) => [
         ...prev,
         { id: `u-${Date.now()}`, role: "user", kind: "analyze", text: contextText.trim(), imageUrl: imageSnapshot },
       ]);
 
-      const res = await fetch(`${API_BASE}/sessions/${sid}/analyze`, { method: "POST", body: fd });
-      if (!res.ok) { setStatus("Analysis failed."); return; }
+      let res = await postAnalyze(sid);
+      if (res.status === 404) {
+        setSessionId(null);
+        sid = await createFreshSession();
+        res = await postAnalyze(sid);
+      }
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) detail = ` ${errBody.error}`;
+        } catch {
+          /* ignore */
+        }
+        setStatus(`Analysis failed.${detail}`);
+        return;
+      }
 
       const report = await res.json();
       setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", kind: "report", report }]);
@@ -521,7 +543,11 @@ export default function App() {
       // keep image in panel so user can reference it; allow new file
       setContextText("");
     } catch {
-      setStatus("Unable to reach the backend.");
+      setStatus(
+        API_BASE.includes("localhost")
+          ? "Unable to reach the backend. For production, set VITE_API_BASE on Render and redeploy the static site."
+          : "Unable to reach the backend. If the API was asleep, wait and try again."
+      );
     } finally {
       setIsAnalyzing(false);
     }
