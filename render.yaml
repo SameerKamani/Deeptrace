@@ -3,8 +3,8 @@ services:
     name: deeptrace-backend
     env: python
     plan: free
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
+    buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
     envVars:
       - key: SPECTRAL_MODEL_PATH
@@ -20,6 +20,9 @@ services:
     name: deeptrace-frontend
     env: static
     plan: free
-    buildCommand: "cd frontend && npm install && npm run build"
+    buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE
+        value: https://deeptrace-backend.onrender.com

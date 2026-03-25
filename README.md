@@ -54,6 +54,17 @@ Set the API URL if needed:
 VITE_API_BASE=http://localhost:8000
 ```
 
+## Deploy on Render
+
+This repo includes `render.yaml` (Blueprint): one **Python web service** (`deeptrace-backend`) and one **static site** (`deeptrace-frontend`). Connect the repo and apply the blueprint from your Render account (sign-in and Git access are required).
+
+1. Push the repo to GitHub (or GitLab/Bitbucket that Render supports).
+2. In [Render](https://dashboard.render.com): **New** → **Blueprint** → connect the repository → apply `render.yaml`.
+3. On the **backend** service, open **Environment** and add secrets (not committed to git): at minimum `GEMINI_API_KEY` and usually `GROQ_API_KEY` for full behavior. See **API Configuration** above. Redeploy after saving.
+4. The static site build uses `VITE_API_BASE=https://deeptrace-backend.onrender.com` (see `render.yaml`). If you **rename** the backend service, set `VITE_API_BASE` on the static site to `https://<your-backend-service-name>.onrender.com` and redeploy the frontend.
+
+**Notes:** Free instances sleep when idle (cold start). PyTorch plus the spectral model can be tight on memory; if the backend crashes on analyze, upgrade the web service plan or consider hosting the spectral model elsewhere. Ensure `deeptrace_fuse_best` (and weight files) are in the deployed branch if you want the spectral detector on; `*.pth` is gitignored locally—use Git LFS or another asset strategy if weights are not in the repo.
+
 ## API (testing)
 
 - `POST /sessions` — create a session id (in-memory).
