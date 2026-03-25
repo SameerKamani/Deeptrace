@@ -204,12 +204,15 @@ class LLMClient:
         return await groq_reply()
 
     async def generate_explanation(
-        self, verdict: str, evidence: Dict[str, Any]
+        self,
+        verdict: str,
+        evidence: Dict[str, Any],
+        reasoning_summary: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         if llm_settings.explanation_provider == "groq" and llm_settings.groq_api_key:
-            return await self._groq_explanation(verdict, evidence)
+            return await self._groq_explanation(verdict, evidence, reasoning_summary)
         if llm_settings.explanation_provider == "gemini" and llm_settings.gemini_api_key:
-            return await self._gemini_text_explanation(verdict, evidence)
+            return await self._gemini_text_explanation(verdict, evidence, reasoning_summary)
         return None
 
     async def analyze_image_semantics(self, image_bytes: bytes) -> Optional[Dict[str, Any]]:
@@ -339,22 +342,26 @@ class LLMClient:
 
     def _get_reasoner_system_prompt(self) -> str:
         return (
-            "You are a senior digital forensic analyst writing the narrative section of a formal verification report "
-            "for investigators, editors, or legal readers. Read the Evidence Profile JSON (multiple independent signals) "
-            "and explain why the stated verdict was reached.\n\n"
+            "You are a senior digital forensic analyst writing the narrative section of a verification report for a non-expert reader. "
+            "Read the evidence summary and Evidence Profile JSON, then explain why the stated verdict was reached in plain, calm language.\n\n"
             "RULES:\n"
-            "1. Tone: Professional, plain language, calm. No hype, no claiming certainty beyond the verdict. If the verdict "
-            "is inconclusive, explain the conflict between signals clearly.\n"
-            "2. Integration: Walk through the most consequential signals by name (e.g. semantic consistency, spectral, "
-            "noise, metadata, ELA, lighting, OSINT). Connect each to what it suggests and its limitations where the JSON implies them.\n"
-            "3. Length: Write two to four substantial paragraphs (not one short blurb). No bullet lists or numbered lists; "
-            "use connected prose.\n"
-            "4. Truth: Never invent observations. Only reference signals and fields present in the JSON."
+            "1. Tone: Professional, conversational, easy to understand, and never dramatic or pretentious. It should sound like a smart person walking someone through the image.\n"
+            "2. Honesty: Do not claim certainty beyond the provided certainty score. If the verdict is inconclusive, clearly state which way the evidence leans, if any.\n"
+            "3. Integration: Mention the strongest signals on both sides when relevant. Use the signal's plain-English fields (`what_checked`, `what_found`, `why_it_matters`, `caveat`) whenever possible instead of repeating raw detector jargon.\n"
+            "4. Structure: Write exactly three short paragraphs. Paragraph 1 should state the verdict, certainty, and overall lean in simple terms. Paragraph 2 should explain the clearest reasons behind the result using concrete observations from the signals. Paragraph 3 should explain competing explanations, caveats, or uncertainty.\n"
+            "5. Style: Avoid vague filler like 'forensic analysis reveals' unless you immediately explain what was actually seen. Prefer wording like 'we noticed', 'we found', 'that matters because', and 'this could also happen if'.\n"
+            "6. Truth: Never invent observations. Only reference signals, scores, and summaries present in the provided data."
         )
 
-    async def _groq_explanation(self, verdict: str, evidence: Dict[str, Any]) -> Optional[str]:
+    async def _groq_explanation(
+        self,
+        verdict: str,
+        evidence: Dict[str, Any],
+        reasoning_summary: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {"Authorization": f"Bearer {llm_settings.groq_api_key}"}
+        summary_json = json.dumps(reasoning_summary or {}, indent=2)
         messages = [
             {
                 "role": "system",
@@ -362,7 +369,11 @@ class LLMClient:
             },
             {
                 "role": "user",
-                "content": f"Verdict Declared: {verdict}\n\nEvidence JSON Profile:\n{json.dumps(evidence, indent=2)}",
+                "content": (
+                    f"Verdict Declared: {verdict}\n\n"
+                    f"Reasoning Summary:\n{summary_json}\n\n"
+                    f"Evidence JSON Profile:\n{json.dumps(evidence, indent=2)}"
+                ),
             },
         ]
         payload = {
@@ -381,10 +392,18 @@ class LLMClient:
             except Exception:
                 return None
 
-    async def _gemini_text_explanation(self, verdict: str, evidence: Dict[str, Any]) -> Optional[str]:
+    async def _gemini_text_explanation(
+        self,
+        verdict: str,
+        evidence: Dict[str, Any],
+        reasoning_summary: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        summary_json = json.dumps(reasoning_summary or {}, indent=2)
         prompt = (
             f"{self._get_reasoner_system_prompt()}\n\n"
-            f"Verdict Declared: {verdict}\n\nEvidence JSON Profile:\n{json.dumps(evidence, indent=2)}"
+            f"Verdict Declared: {verdict}\n\n"
+            f"Reasoning Summary:\n{summary_json}\n\n"
+            f"Evidence JSON Profile:\n{json.dumps(evidence, indent=2)}"
         )
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],

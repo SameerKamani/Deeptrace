@@ -1,0 +1,44 @@
+{
+    "timestamp": "2026-03-25T15:04:49.344118+00:00",
+    "image_hash": "9bb6c6fe8c229fb142d2964f839b921b78847cce78c29e30c9e2e8d5a1aad2b0",
+    "global_execution_time": 29.8381,
+    "reasoning_execution_time": 0.8712,
+    "detector_metrics": {
+        "spectral_artifacts": {
+            "status": "ok",
+            "time_seconds": 13.3103,
+            "reliability": 0.7
+        },
+        "metadata_analysis": {
+            "status": "warning",
+            "time_seconds": 0.0,
+            "reliability": 0.3
+        },
+        "noise_pattern_analysis": {
+            "status": "ok",
+            "time_seconds": 0.1348,
+            "reliability": 0.2
+        },
+        "lighting_consistency": {
+            "status": "ok",
+            "time_seconds": 0.0322,
+            "reliability": 0.3
+        },
+        "error_level_analysis": {
+            "status": "ok",
+            "time_seconds": 1.6929,
+            "reliability": 0.25
+        },
+        "semantic_inconsistencies": {
+            "status": "ok",
+            "time_seconds": 11.2605,
+            "reliability": 0.4
+        },
+        "osint_verification": {
+            "status": "ok",
+            "time_seconds": 13.5062,
+            "reliability": 0.45
+        }
+    },
+    "final_verdict": "likely_ai_generated"
+}

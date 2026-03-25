@@ -21,6 +21,7 @@ class EvidenceSignal(BaseModel):
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     supports: SignalSupport = SignalSupport.UNKNOWN
     notes: Optional[str] = None
+    verdict_influence_percent: Optional[int] = None  # 0–100, set by pipeline after reasoning
 ```
 
 **Field Descriptions:**

@@ -65,20 +65,110 @@ const getVerdictClass = (verdict) => {
   return "verdict-inconclusive";
 };
 
+const formatVerdict = (verdict) => verdict.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatSupportLabel = (support) => {
+  const value = (support || "unknown").toLowerCase();
+  if (value === "authentic") return "Suggests a real photo";
+  if (value === "ai_generated") return "Suggests AI generation";
+  if (value === "inconclusive") return "Mixed or unclear";
+  return "No clear direction";
+};
+
+const getSupportClass = (support) => {
+  const value = (support || "unknown").toLowerCase();
+  if (value === "authentic") return "support-authentic";
+  if (value === "ai_generated") return "support-ai_generated";
+  if (value === "inconclusive") return "support-inconclusive";
+  return "support-neutral";
+};
+
+const getStatusBadgeClass = (status) => {
+  const value = (status || "").toLowerCase();
+  if (value === "ok") return "status-pass";
+  if (value === "warning") return "status-warn";
+  if (value === "error") return "status-error";
+  return "status-info";
+};
+
+function isOsintSignal(signal) {
+  const id = (signal.id || "").toLowerCase();
+  const name = (signal.name || "").toLowerCase();
+  return id === "osint_verification" || name.includes("osint") || name.includes("web fact-checking");
+}
+
+const formatStatusLabel = (status) => {
+  const value = (status || "").toLowerCase();
+  if (value === "ok") return "Completed";
+  if (value === "warning") return "Limited";
+  if (value === "error") return "Error";
+  if (value === "unavailable") return "Unavailable";
+  return value || "Unknown";
+};
+
+const formatConfidenceLabel = (label) => {
+  const value = (label || "").toLowerCase();
+  if (!value) return "Unrated";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
 function AnimatedSignalCard({ signal, index }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-40px" });
   const theme = getSignalTheme(signal.category);
+  const wide = isOsintSignal(signal);
+  const detailRows = [
+    { label: "What we checked", value: signal.what_checked },
+    { label: "What we found", value: signal.what_found },
+    { label: "Why it matters", value: signal.why_it_matters },
+    { label: "Possible caveat", value: signal.caveat },
+  ].filter((row) => row.value);
+
+  const hasInfluence = typeof signal.verdict_influence_percent === "number";
+  const barPct = hasInfluence ? signal.verdict_influence_percent : Math.round((signal.reliability || 0) * 100);
+
+  const statsBlock = (
+    <div className={`signal-stats ${wide ? "signal-stats-osint" : ""}`}>
+      <div
+        className="stat-item"
+        title={
+          hasInfluence
+            ? "Share of total weighted evidence mass in this report after reasoning (detector importance × reliability × status, then how strongly it pointed a direction)."
+            : "Detector-assigned confidence only; run a fresh analysis for verdict-aligned influence."
+        }
+      >
+        <span className="stat-label">{hasInfluence ? "Influence on verdict" : "Detector confidence"}</span>
+        <div className="reliability-bar-wrap">
+          <span className="stat-value">{barPct}%</span>
+          <div className={`reliability-bar ${wide ? "reliability-bar-wide" : ""}`}>
+            <motion.div
+              className="reliability-fill"
+              style={{ background: theme.color }}
+              initial={{ width: 0 }}
+              animate={isInView ? { width: `${barPct}%` } : {}}
+              transition={{ duration: 0.8, delay: index * 0.07 + 0.3, ease: "easeOut" }}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="stat-item">
+        <span className="stat-label">Where It Leans</span>
+        <span className={`stat-value ${getSupportClass(signal.supports)}`}>
+          {formatSupportLabel(signal.supports)}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
     <motion.div
       ref={ref}
-      className="signal-card"
+      className={`signal-card${wide ? " signal-card-osint" : ""}`}
       style={{ "--signal-color": theme.color, "--signal-glow": theme.glow }}
       initial={{ opacity: 0, y: 30 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ type: "spring", stiffness: 280, damping: 22, delay: index * 0.07 }}
-      whileHover={{ y: -5, boxShadow: `0 16px 40px ${theme.glow}` }}
+      whileHover={{ y: wide ? -2 : -5, boxShadow: `0 16px 40px ${theme.glow}` }}
     >
       <div className="signal-header">
         <div className="signal-title-wrap">
@@ -87,47 +177,74 @@ function AnimatedSignalCard({ signal, index }) {
           </span>
           <h4>{signal.name}</h4>
         </div>
-        <span className={`signal-status-badge status-${signal.status}`}>{signal.status}</span>
+        <span className={`signal-status-badge ${getStatusBadgeClass(signal.status)}`}>{formatStatusLabel(signal.status)}</span>
       </div>
 
-      <div className="signal-stats">
-        <div className="stat-item">
-          <span className="stat-label">Reliability</span>
-          <div className="reliability-bar-wrap">
-            <span className="stat-value">{(signal.reliability * 100).toFixed(0)}%</span>
-            <div className="reliability-bar">
-              <motion.div
-                className="reliability-fill"
-                style={{ background: theme.color }}
-                initial={{ width: 0 }}
-                animate={isInView ? { width: `${signal.reliability * 100}%` } : {}}
-                transition={{ duration: 0.8, delay: index * 0.07 + 0.3, ease: "easeOut" }}
-              />
-            </div>
+      {wide ? (
+        <div
+          className={[
+            "signal-osint-layout",
+            !detailRows.length ? "signal-osint-layout-nodetails" : "",
+            !signal.observations?.length ? "signal-osint-layout-notech" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <div className="signal-osint-primary">
+            {statsBlock}
+            <div className="signal-summary signal-summary-osint">{signal.summary}</div>
           </div>
+          {detailRows.length > 0 && (
+            <div className="signal-osint-detail-grid">
+              {detailRows.map((row) => (
+                <div key={row.label} className="signal-detail-cell">
+                  <span className="signal-detail-label">{row.label}</span>
+                  <p className="signal-detail-text signal-detail-text-compact">{row.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {signal.observations?.length > 0 && (
+            <div className="signal-osint-tech">
+              <span className="signal-detail-label">Technical details</span>
+              <ul className="observations-list observations-list-osint">
+                {signal.observations.map((obs, idx) => (
+                  <li key={idx}>{obs}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-        <div className="stat-item">
-          <span className="stat-label">Direction</span>
-          <span className={`stat-value support-${signal.supports}`}>
-            {signal.supports.replace(/_/g, " ").toUpperCase()}
-          </span>
-        </div>
-      </div>
-
-      <div className="signal-summary">{signal.summary}</div>
-
-      {signal.observations?.length > 0 && (
-        <ul className="observations-list">
-          {signal.observations.map((obs, idx) => (
-            <li key={idx}>{obs}</li>
-          ))}
-        </ul>
-      )}
-
-      {signal.metrics?.ela_image_base64 && (
-        <div className="signal-image-container">
-          <img src={`data:image/png;base64,${signal.metrics.ela_image_base64}`} alt="ELA Heatmap" />
-        </div>
+      ) : (
+        <>
+          {statsBlock}
+          <div className="signal-summary">{signal.summary}</div>
+          {detailRows.length > 0 && (
+            <div className="signal-explainer">
+              {detailRows.map((row) => (
+                <div key={row.label} className="signal-detail-row">
+                  <span className="signal-detail-label">{row.label}</span>
+                  <p className="signal-detail-text">{row.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {signal.observations?.length > 0 && (
+            <div className="signal-tech">
+              <span className="signal-detail-label">Technical details</span>
+              <ul className="observations-list">
+                {signal.observations.map((obs, idx) => (
+                  <li key={idx}>{obs}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {signal.metrics?.ela_image_base64 && (
+            <div className="signal-image-container">
+              <img src={`data:image/png;base64,${signal.metrics.ela_image_base64}`} alt="ELA Heatmap" />
+            </div>
+          )}
+        </>
       )}
     </motion.div>
   );
@@ -190,6 +307,12 @@ function ScanningOverlay({ steps, currentStep }) {
 function ForensicReportCard({ reportData, showJson, onToggleJson }) {
   if (!reportData) return null;
   const jsonStr = JSON.stringify(reportData, null, 2);
+  const certaintyPercent = Math.round((reportData.certainty || 0) * 100);
+  const explanationParagraphs = String(reportData.explanation || "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const showLeaning = reportData.verdict === "inconclusive" && reportData.leaning;
 
   return (
     <div className="report-inner">
@@ -202,9 +325,32 @@ function ForensicReportCard({ reportData, showJson, onToggleJson }) {
         <VerdictIcon verdict={reportData.verdict} size={28} />
         <div className="verdict-text-wrap">
           <span className="verdict-label">Verdict</span>
-          <span className="verdict-value">{reportData.verdict.replace(/_/g, " ").toUpperCase()}</span>
+          <span className="verdict-value">{formatVerdict(reportData.verdict)}</span>
+          {reportData.short_summary && <p className="verdict-summary">{reportData.short_summary}</p>}
         </div>
-        <span className="report-ts">{new Date(reportData.generated_at).toLocaleString()}</span>
+        <div className="verdict-meta">
+          <div className="verdict-confidence">
+            <span className="verdict-confidence-label">How sure we are</span>
+            <span className="verdict-confidence-value">{certaintyPercent}%</span>
+            <span className="verdict-confidence-tag">{formatConfidenceLabel(reportData.confidence_label)}</span>
+          </div>
+          {showLeaning && (
+            <div className="verdict-leaning">
+              <span className="verdict-confidence-label">Current lean</span>
+              <span className="verdict-leaning-value">{formatVerdict(reportData.leaning)}</span>
+            </div>
+          )}
+          <span className="report-ts">{new Date(reportData.generated_at).toLocaleString()}</span>
+        </div>
+      </motion.div>
+
+      <motion.div
+        className="report-helper"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.4 }}
+      >
+        This score tells you how strongly the evidence agrees overall. It is not a guarantee, and the explanation below matters more than the number by itself.
       </motion.div>
 
       <motion.div
@@ -213,7 +359,9 @@ function ForensicReportCard({ reportData, showJson, onToggleJson }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25, duration: 0.5 }}
       >
-        {reportData.explanation}
+        {explanationParagraphs.map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
       </motion.div>
 
       <motion.div
@@ -225,6 +373,9 @@ function ForensicReportCard({ reportData, showJson, onToggleJson }) {
         <h3 className="signals-section-title">
           <Layers size={14} /> Evidence signals
         </h3>
+        <p className="signals-section-copy">
+          Each card explains what that check looked for, what it found in this image, why it matters, and what might also explain it.
+        </p>
         <div className="signals-grid">
           {reportData.evidence?.signals?.length > 0
             ? reportData.evidence.signals.map((signal, i) => (

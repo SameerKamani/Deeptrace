@@ -51,7 +51,11 @@ class ErrorLevelAnalysisDetector(Detector):
             category=self.category,
             status=SignalStatus.OK,
             reliability=0.25,
-            summary="ELA heatmap generated.",
+            summary="This check looked for uneven compression that can suggest editing or recompositing.",
+            what_checked="We re-saved the image and measured where compression changes are stronger or weaker across the frame.",
+            what_found="The heatmap shows where compression differences stand out, which can sometimes reveal edited regions or uneven image history.",
+            why_it_matters="This is more useful for spotting manipulation or pasted-in regions than for proving pure AI generation by itself.",
+            caveat="ELA is a weak signal on modern images because social media compression, resaving, and editing can all affect it.",
             observations=observations,
             metrics={
                 "ela_mean": mean_diff,

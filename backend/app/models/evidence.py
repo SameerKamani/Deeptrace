@@ -27,11 +27,21 @@ class EvidenceSignal(BaseModel):
     status: SignalStatus
     reliability: float = Field(..., ge=0.0, le=1.0)
     summary: str
+    what_checked: Optional[str] = None
+    what_found: Optional[str] = None
+    why_it_matters: Optional[str] = None
+    caveat: Optional[str] = None
     observations: List[str] = Field(default_factory=list)
     metrics: Dict[str, Any] = Field(default_factory=dict)
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     supports: SignalSupport = SignalSupport.UNKNOWN
     notes: Optional[str] = None
+    verdict_influence_percent: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Share of total weighted evidence mass from reasoning (0–100). Set after aggregation.",
+    )
 
 
 class ImageInfo(BaseModel):

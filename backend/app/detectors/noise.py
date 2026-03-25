@@ -48,29 +48,41 @@ class NoisePatternDetector(Detector):
         # Logic for verdicts
         supports = SignalSupport.UNKNOWN
         reliability = 0.4
-        summary = "Noise profile evaluated."
+        summary = "The image texture and noise pattern were evaluated."
+        what_found = "The texture pattern did not strongly stand out yet."
+        why_it_matters = "Real cameras usually leave behind at least some sensor noise, while generated or heavily filtered images can look unnaturally smooth."
 
         # Real cameras almost always have some base ISO noise. Generative AI can be mathematically flat in unfocused areas.
         if dead_zone_ratio > 0.4 and high_freq_overall < 4.0:
             observations.append(f"CRITICAL: Unnatural topological smoothness detected. {dead_zone_ratio*100:.0f}% of the image lacks base sensor noise structure.")
             supports = SignalSupport.AI_GENERATED
             reliability = 0.65
-            summary = "Profoundly unnatural noise uniformity detected."
+            summary = "Large parts of the image look unusually smooth for a normal camera photo."
+            what_found = (
+                f"Around {dead_zone_ratio:.0%} of the image looks too flat and lacks the small grain a camera usually leaves behind."
+            )
+            why_it_matters = "That leans toward AI generation or very heavy filtering, because real photos rarely stay this clean across broad areas."
         elif variance > 1000.0 and high_freq_overall > 15.0:
             observations.append("Heavy, highly chaotic noise structure. Consistent with high-ISO real photography, but could be artificial post-grain.")
             supports = SignalSupport.AUTHENTIC
             reliability = 0.35
-            summary = "Consistent with natural high-ISO sensor grain."
+            summary = "The image contains strong grain that looks more like a noisy real photo than a clean generated image."
+            what_found = "The texture is busy and noisy rather than overly smooth."
+            why_it_matters = "That can happen in real photos shot in difficult conditions, although added grain can sometimes imitate it."
         elif dead_zone_ratio < 0.05 and variance > 50.0:
             observations.append("Subtle, uniform grain structure present across all focal depths, strongly indicating real glass/sensor optics.")
             supports = SignalSupport.AUTHENTIC
             reliability = 0.55
-            summary = "Lifelike thermal noise and focal depth grain."
+            summary = "The image has natural-looking fine grain instead of perfectly smooth surfaces."
+            what_found = "We see subtle texture across the image that looks more like normal camera grain than synthetic smoothness."
+            why_it_matters = "That slightly favors a real photo, because cameras usually leave behind a small amount of natural sensor noise."
         else:
             observations.append("Noise distribution is completely mid-range. Inconclusive profile.")
             supports = SignalSupport.INCONCLUSIVE
             reliability = 0.2
-            summary = "Noise structure provides no defensive statistical deviation."
+            summary = "The texture pattern is mixed and does not clearly point either way."
+            what_found = "The image is neither clearly too smooth nor clearly rich in natural camera grain."
+            why_it_matters = "That makes this signal weak for decision-making on its own."
 
         return EvidenceSignal(
             id=self.id,
@@ -79,6 +91,10 @@ class NoisePatternDetector(Detector):
             status=SignalStatus.OK,
             reliability=reliability,
             summary=summary,
+            what_checked="We checked the tiny texture of the image to see whether it behaves like normal camera sensor noise.",
+            what_found=what_found,
+            why_it_matters=why_it_matters,
+            caveat="Editing, denoising, upscaling, filters, or compression can change this signal, so it should never be used alone.",
             observations=observations,
             metrics={
                 "mean": mean,

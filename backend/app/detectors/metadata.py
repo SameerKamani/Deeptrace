@@ -30,7 +30,11 @@ class MetadataDetector(Detector):
                 category=self.category,
                 status=SignalStatus.ERROR,
                 reliability=0.0,
-                summary="Failed to extract EXIF metadata payload.",
+                summary="This metadata check failed before it could read the file information.",
+                what_checked="We checked the image file for camera, software, and EXIF information.",
+                what_found="The metadata could not be read successfully.",
+                why_it_matters="Metadata can sometimes show whether a file came from a real camera, editing software, or a generative tool.",
+                caveat="A metadata error is not evidence for or against AI generation by itself.",
                 observations=[f"EXIF extraction raised an exception: {exc}"],
                 supports=SignalSupport.UNKNOWN,
             )
@@ -38,6 +42,8 @@ class MetadataDetector(Detector):
         observations = []
         supports = SignalSupport.UNKNOWN
         reliability = 0.2
+        what_found = "The file did not provide a clear creation trail yet."
+        why_it_matters = "Metadata is one useful clue about provenance, but it is rarely enough on its own."
 
         if not exif:
             observations.append("CRITICAL: Image contains absolutely zero EXIF metadata. Stripped or procedurally generated.")
@@ -47,7 +53,11 @@ class MetadataDetector(Detector):
                 category=self.category,
                 status=SignalStatus.WARNING,
                 reliability=0.3,
-                summary="Metadata is completely absent.",
+                summary="The file does not contain any usable metadata.",
+                what_checked="We checked whether the file still carries camera or software information.",
+                what_found="This image has no EXIF metadata at all, so we cannot see what device or software created it.",
+                why_it_matters="Missing metadata removes a useful source of provenance, but it does not automatically mean the image is AI-generated.",
+                caveat="Many social media platforms strip metadata during upload, so this signal is weak on its own.",
                 observations=observations,
                 metrics={"exif_count": 0},
                 supports=SignalSupport.UNKNOWN,
@@ -70,7 +80,11 @@ class MetadataDetector(Detector):
                 category=self.category,
                 status=SignalStatus.OK,
                 reliability=0.95,
-                summary="Explicit generative metadata trace found.",
+                summary="The file metadata explicitly points to a generative tool.",
+                what_checked="We checked whether the file names a camera, editing app, or AI generation tool.",
+                what_found=f"The metadata directly references generative software: {software or make}.",
+                why_it_matters="This is one of the strongest metadata signals, because it is a direct trace left in the file itself.",
+                caveat="Metadata can be edited, but an explicit AI software trace is still strong evidence unless there is reason to suspect tampering.",
                 observations=observations,
                 metrics={"exif_count": len(exif)},
                 supports=SignalSupport.AI_GENERATED,
@@ -88,16 +102,25 @@ class MetadataDetector(Detector):
                 observations.append(f"Physical optics data present ({found_physics_tags}/{len(important_tags)} core tags).")
                 supports = SignalSupport.AUTHENTIC
                 reliability = 0.6
-                summary = "Consistent physical camera footprint found."
+                summary = "The metadata looks consistent with a real camera image."
+                what_found = (
+                    f"The file includes camera details and several normal photo-capture tags "
+                    f"({found_physics_tags}/{len(important_tags)} important optics fields present)."
+                )
+                why_it_matters = "That leans toward a real photograph because the file carries a believable camera footprint."
             else:
                 observations.append("Camera make/model exists, but deep optical physics data is missing. Potentially spoofed.")
                 supports = SignalSupport.INCONCLUSIVE
                 reliability = 0.4
-                summary = "Hardware footprint found but optical data is incomplete."
+                summary = "The metadata shows some camera information, but it is incomplete."
+                what_found = "The file names a device, but the supporting camera-capture details are too thin to fully trust."
+                why_it_matters = "That gives some support for authenticity, but not enough to rely on by itself."
                 
         else:
             observations.append("EXIF block initialized but lacks explicit hardware (Make/Model) identifiers.")
-            summary = "Incomplete standard metadata."
+            summary = "The file has some metadata, but not enough to identify a clear source."
+            what_found = "There is metadata present, but it does not clearly identify a camera or creation tool."
+            why_it_matters = "That leaves provenance uncertain rather than clearly real or clearly generated."
 
         if software and not is_ai_stamped:
             observations.append(f"Post-processing software trace: {software}")
@@ -109,6 +132,10 @@ class MetadataDetector(Detector):
             status=SignalStatus.OK,
             reliability=reliability,
             summary=summary,
+            what_checked="We checked the file for camera details, software traces, and other provenance clues.",
+            what_found=what_found,
+            why_it_matters=why_it_matters,
+            caveat="Metadata helps with provenance, but it can be missing, stripped, or manually edited.",
             observations=observations,
             metrics={"exif_count": len(exif)},
             supports=supports,

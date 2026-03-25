@@ -12,6 +12,7 @@ Explainable forensic verification for AI-generated images.
 - OSINT: Gemini Google Search grounding when enabled, DuckDuckGo fallback
 - LLM-powered reasoning (Gemini/Groq)
 - Evidence-based explanations
+- Each signal includes `verdict_influence_percent`: share of total weighted evidence mass after reasoning (UI bar), not raw detector reliability alone
 - X-ray performance logging
 
 ## Quick start

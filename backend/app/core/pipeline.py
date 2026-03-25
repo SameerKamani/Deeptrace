@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ..detectors.registry import registry
 from ..models.evidence import EvidenceProfile, ImageInfo
-from ..models.report import ForensicReport, Verdict
+from ..models.report import ForensicReport
 from ..reasoning.engine import ReasoningEngine
 
 
@@ -75,12 +75,26 @@ class AnalysisPipeline:
         evidence = EvidenceProfile(image=image_info, signals=signals)
         
         reasoning_start = time.perf_counter()
-        verdict, explanation = await self.reasoning.reason(evidence)
+        reasoning_outcome = await self.reasoning.reason(evidence)
         reasoning_duration = time.perf_counter() - reasoning_start
 
+        total_w = reasoning_outcome.score_breakdown.total_considered
+        contrib = reasoning_outcome.signal_contributions
+        merged_signals = []
+        for sig in evidence.signals:
+            raw = contrib.get(sig.id, 0.0)
+            pct = int(min(100, round(100 * raw / total_w))) if total_w > 1e-9 else 0
+            merged_signals.append(sig.model_copy(update={"verdict_influence_percent": pct}))
+        evidence = evidence.model_copy(update={"signals": merged_signals})
+
         report = ForensicReport(
-            verdict=verdict,
-            explanation=explanation,
+            verdict=reasoning_outcome.verdict,
+            certainty=reasoning_outcome.certainty,
+            confidence_label=reasoning_outcome.confidence_label,
+            leaning=reasoning_outcome.leaning,
+            short_summary=reasoning_outcome.short_summary,
+            explanation=reasoning_outcome.explanation,
+            score_breakdown=reasoning_outcome.score_breakdown,
             evidence=evidence,
             generated_at=ForensicReport.now(),
         )
@@ -93,7 +107,8 @@ class AnalysisPipeline:
             "global_execution_time": round(global_duration, 4),
             "reasoning_execution_time": round(reasoning_duration, 4),
             "detector_metrics": xray_metrics,
-            "final_verdict": verdict.value
+            "final_verdict": report.verdict.value,
+            "certainty": report.certainty,
         }
         
         # Write to logs directory
